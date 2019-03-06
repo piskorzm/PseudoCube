@@ -35,9 +35,12 @@ public class Block implements Cloneable {
     }
 
     public void draw(Canvas canvas) {
-        PseudoCube.paint.setColor(color);
-        canvas.drawRoundRect(rect, Consts.BLOCK_RADIUS, Consts.BLOCK_RADIUS, PseudoCube.paint);
+        if (!PseudoCube.animatedBlocks.contains(this) || PseudoCube.stationaryBlocksDrawn) {
+            PseudoCube.paint.setColor(color);
+            canvas.drawRoundRect(rect, Consts.BLOCK_RADIUS, Consts.BLOCK_RADIUS, PseudoCube.paint);
+        }
     }
+
     public int getX() {
         return x;
     }

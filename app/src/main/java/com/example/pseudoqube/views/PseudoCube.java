@@ -13,16 +13,26 @@ import android.view.View;
 import com.example.pseudoqube.elements.Block;
 import com.example.pseudoqube.elements.Face;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class PseudoCube extends View {
 
     public static Paint paint;
+    public static int angle = 0;
+    public static List<Block> animatedBlocks = new ArrayList<Block>();
+    public boolean animationStarted;
+    public char animationDirection;
+    public int animationAnglePerFrame = 9;
+    public int animatedFloor;
+    public static boolean stationaryBlocksDrawn;
 
     private HashMap<Character, Face> faces;
     private int faceSize;
-    private int v_centre, h_centre;
+    public static int v_centre, h_centre;
 
     private VelocityTracker mVelocityTracker = null;
     private Block selectedBlock;
@@ -50,7 +60,7 @@ public class PseudoCube extends View {
         faces = new HashMap<>();
 
         int width = this.getResources().getDisplayMetrics().widthPixels;
-        int height =  this.getResources().getDisplayMetrics().heightPixels;
+        int height = this.getResources().getDisplayMetrics().heightPixels;
 
         int shorterScreenEdge = (width < height ? width : height);
 
@@ -61,7 +71,7 @@ public class PseudoCube extends View {
         paint = new Paint();
         paint.setAntiAlias(true);
 
-        Face frontFace = new Face('F', faceSize, h_centre - faceSize/2, v_centre - faceSize/2, Color.WHITE);
+        Face frontFace = new Face('F', faceSize, h_centre - faceSize / 2, v_centre - faceSize / 2, Color.WHITE);
         Face westFace = new Face('W', faceSize, frontFace.getHorizontalPosition() - faceSize, frontFace.getVerticalPosition(), Color.RED);
         Face northFace = new Face('N', faceSize, frontFace.getHorizontalPosition(), frontFace.getVerticalPosition() - faceSize, Color.BLUE);
         Face eastFace = new Face('E', faceSize, frontFace.getHorizontalPosition() + faceSize, frontFace.getVerticalPosition(), Color.rgb(255, 150, 0));
@@ -76,98 +86,106 @@ public class PseudoCube extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        canvas.drawColor(Color.rgb(15,15,30));
+        canvas.drawColor(Color.rgb(15, 15, 30));
+        if (Math.abs(angle) >= 90) {
+            finishRotationAnination();
+        }
 
-        //canvas.rotate(45, h_centre, v_centre);
+        stationaryBlocksDrawn = false;
 
-        for(Map.Entry<Character, Face> entry : faces.entrySet()) {
+        for (Map.Entry<Character, Face> entry : faces.entrySet()) {
             entry.getValue().draw(canvas);
+        }
+
+        stationaryBlocksDrawn = true;
+
+        if (animationStarted) {
+            angle += animationAnglePerFrame * (animationDirection == 'R' ? 1 : -1);
+            canvas.save();
+            canvas.rotate(angle, h_centre, v_centre);
+            for (Block block : animatedBlocks) {
+                block.draw(canvas);
+            }
+            canvas.restore();
+            invalidate();
         }
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        int index = event.getActionIndex();
-        int action = event.getActionMasked();
-        int pointerId = event.getPointerId(index);
+        if (!animationStarted) {
+            int index = event.getActionIndex();
+            int action = event.getActionMasked();
+            int pointerId = event.getPointerId(index);
 
-        switch(action) {
-            case MotionEvent.ACTION_DOWN:
+            switch (action) {
+                case MotionEvent.ACTION_DOWN:
 
-                if(mVelocityTracker == null) {
-                    mVelocityTracker = VelocityTracker.obtain();
-                }
-                else {
+                    if (mVelocityTracker == null) {
+                        mVelocityTracker = VelocityTracker.obtain();
+                    } else {
+                        mVelocityTracker.clear();
+                    }
+                    if (selectedBlock == null) {
+                        Block block = getTouchedRectangle(event.getX(), event.getY());
+                        selectedBlock = block;
+                    }
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    mVelocityTracker.addMovement(event);
+                    mVelocityTracker.computeCurrentVelocity(1000);
+                    velocityX = mVelocityTracker.getXVelocity(pointerId);
+                    velocityY = mVelocityTracker.getYVelocity(pointerId);
+
+                    if (selectedBlock == null) {
+                        Block block = getTouchedRectangle(event.getX(), event.getY());
+                        selectedBlock = block;
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+
+
+                    performAction();
+
+                    selectedBlock = null;
+                    velocityX = 0;
+                    velocityY = 0;
                     mVelocityTracker.clear();
-                }
-                if (selectedBlock == null) {
-                    Block block = getTouchedRectangle(event.getX(), event.getY());
-                    selectedBlock = block;
-                }
-                break;
-            case MotionEvent.ACTION_MOVE:
-                mVelocityTracker.addMovement(event);
-                mVelocityTracker.computeCurrentVelocity(1000);
-                velocityX = mVelocityTracker.getXVelocity(pointerId);
-                velocityY = mVelocityTracker.getYVelocity(pointerId);
-
-                if (selectedBlock == null) {
-                    Block block = getTouchedRectangle(event.getX(), event.getY());
-                    selectedBlock = block;
-                }
-                break;
-            case MotionEvent.ACTION_UP:
-            case MotionEvent.ACTION_CANCEL:
-
-
-
-                performAction();
-
-                selectedBlock = null;
-                velocityX = 0;
-                velocityY = 0;
-                mVelocityTracker.clear();
-                break;
+                    break;
+            }
         }
 
         return true;
     }
 
     protected void performAction() {
-        if (selectedBlock != null && (velocityX != 0 || velocityY !=0)) {
+        if (selectedBlock != null && (velocityX != 0 || velocityY != 0)) {
             char direction = getDirection(velocityX, velocityY);
 
             if ((direction == 'U' || direction == 'D') && (selectedBlock.getFaceCharId() == 'F' || selectedBlock.getFaceCharId() == 'N' || selectedBlock.getFaceCharId() == 'S')) {
                 shiftCol(selectedBlock.getColIndex(), direction);
-            }
-            else if ((direction == 'L' || direction == 'R') && (selectedBlock.getFaceCharId() == 'F' || selectedBlock.getFaceCharId() == 'W' || selectedBlock.getFaceCharId() == 'E')) {
+            } else if ((direction == 'L' || direction == 'R') && (selectedBlock.getFaceCharId() == 'F' || selectedBlock.getFaceCharId() == 'W' || selectedBlock.getFaceCharId() == 'E')) {
                 shiftRow(selectedBlock.getRowIndex(), direction);
-            }
-            else if ((direction == 'L' || direction == 'R') && selectedBlock.getFaceCharId() == 'N') {
+            } else if ((direction == 'L' || direction == 'R') && selectedBlock.getFaceCharId() == 'N') {
                 rotateFloor(2 - selectedBlock.getRowIndex(), direction);
-            }
-            else if (selectedBlock.getFaceCharId() == 'S') {
+            } else if (selectedBlock.getFaceCharId() == 'S') {
                 if (direction == 'L') {
                     rotateFloor(selectedBlock.getRowIndex(), 'R');
-                }
-                else if (direction == 'R') {
+                } else if (direction == 'R') {
                     rotateFloor(selectedBlock.getRowIndex(), 'L');
                 }
-            }
-            else if (selectedBlock.getFaceCharId() == 'W') {
+            } else if (selectedBlock.getFaceCharId() == 'W') {
                 if (direction == 'U') {
-                    rotateFloor(2 - selectedBlock.getColIndex(), 'R');
+                    setupRotationAnimation(2 - selectedBlock.getColIndex(), 'R');
+                } else if (direction == 'D') {
+                    setupRotationAnimation(2 - selectedBlock.getColIndex(), 'L');
                 }
-                else if (direction == 'D') {
-                    rotateFloor(2 - selectedBlock.getColIndex(), 'L');
-                }
-            }
-            else if (selectedBlock.getFaceCharId() == 'E') {
+            } else if (selectedBlock.getFaceCharId() == 'E') {
                 if (direction == 'U') {
-                    rotateFloor(selectedBlock.getColIndex(), 'L');
-                }
-                else if (direction == 'D') {
-                    rotateFloor(selectedBlock.getColIndex(), 'R');
+                    setupRotationAnimation(selectedBlock.getColIndex(), 'L');
+                } else if (direction == 'D') {
+                    setupRotationAnimation(selectedBlock.getColIndex(), 'R');
                 }
             }
         }
@@ -176,18 +194,16 @@ public class PseudoCube extends View {
 
     protected char getDirection(float x, float y) {
         char direction = 'I';
-        if(Math.abs(velocityX) < Math.abs(velocityY)) {
-            if(velocityY < 0) {
+        if (Math.abs(velocityX) < Math.abs(velocityY)) {
+            if (velocityY < 0) {
                 direction = 'U';
-            }
-            else {
+            } else {
                 direction = 'D';
             }
         } else {
-            if(velocityX < 0) {
+            if (velocityX < 0) {
                 direction = 'L';
-            }
-            else {
+            } else {
                 direction = 'R';
             }
         }
@@ -196,13 +212,13 @@ public class PseudoCube extends View {
 
 
     protected Block getTouchedRectangle(float x, float y) {
-        for(Map.Entry<Character, Face> entry : faces.entrySet()) {
+        for (Map.Entry<Character, Face> entry : faces.entrySet()) {
             Face face = entry.getValue();
             Block[][] blocks = face.getBlocks();
 
-            for(int i = 0; i < blocks.length; i++) {
-                for(int j = 0; j < blocks[i].length; j ++) {
-                    Block block = blocks [i][j];
+            for (int i = 0; i < blocks.length; i++) {
+                for (int j = 0; j < blocks[i].length; j++) {
+                    Block block = blocks[i][j];
 
                     if (block.getRect().contains(x, y)) {
                         return block;
@@ -219,8 +235,7 @@ public class PseudoCube extends View {
             faces.get('E').setRowColors(faces.get('F').getRowColors(row), row);
             faces.get('F').setRowColors(faces.get('W').getRowColors(row), row);
             faces.get('W').setRowColors(temporary, row);
-        }
-        else if (direction == 'L') {
+        } else if (direction == 'L') {
             int[] temporary = faces.get('W').getRowColors(row).clone();
             faces.get('W').setRowColors(faces.get('F').getRowColors(row), row);
             faces.get('F').setRowColors(faces.get('E').getRowColors(row), row);
@@ -234,8 +249,7 @@ public class PseudoCube extends View {
             faces.get('N').setColColors(faces.get('F').getColColors(col), col);
             faces.get('F').setColColors(faces.get('S').getColColors(col), col);
             faces.get('S').setColColors(temporary, col);
-        }
-        else if (direction == 'D') {
+        } else if (direction == 'D') {
             int[] temporary = faces.get('S').getColColors(col).clone();
             faces.get('S').setColColors(faces.get('F').getColColors(col), col);
             faces.get('F').setColColors(faces.get('N').getColColors(col), col);
@@ -280,6 +294,31 @@ public class PseudoCube extends View {
             frontFace.setBlockColor(tempMiddleLeftColor, 2, 1);
             frontFace.setBlockColor(tempMiddleRightColor, 0, 1);
         }
+    }
+
+    public void setupRotationAnimation(int floor, char direction) {
+        animationStarted = true;
+        animatedFloor = floor;
+        animationDirection = direction;
+
+        animatedBlocks.addAll(Arrays.asList(faces.get('N').getRow(2 - floor)));
+        animatedBlocks.addAll(Arrays.asList(faces.get('E').getCol(floor)));
+        animatedBlocks.addAll(Arrays.asList(faces.get('S').getRow(floor)));
+        animatedBlocks.addAll(Arrays.asList(faces.get('W').getCol(2 - floor)));
+
+        if (floor == 0) {
+            animatedBlocks.addAll(Arrays.asList(faces.get('F').getCol(0)));
+            animatedBlocks.addAll(Arrays.asList(faces.get('F').getCol(1)));
+            animatedBlocks.addAll(Arrays.asList(faces.get('F').getCol(2)));
+        }
+    }
+
+    public void finishRotationAnination() {
+        animatedBlocks.clear();
+        animationStarted = false;
+        angle = 0;
+
+        rotateFloor(animatedFloor, animationDirection);
     }
 
     public int[] inverted(int[] array) {
