@@ -4,6 +4,10 @@ import android.graphics.Canvas;
 
 import com.example.pseudoqube.views.Consts;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 public class Face {
 
     private int x, y, size;
@@ -125,5 +129,15 @@ public class Face {
 
     public Block[][] getBlocks() {
         return blocks;
+    }
+
+    public List<Block> getBlocksAsList() {
+        List<Block> blocksList = new ArrayList<Block>();
+
+        for (Block[] row : blocks) {
+            blocksList.addAll(Arrays.asList(row));
+        }
+
+        return blocksList;
     }
 }
